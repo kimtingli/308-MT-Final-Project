@@ -1,0 +1,97 @@
+---
+title: "STAT 308 Final Project"
+author: "Kim Ting Li, Claire Guo"
+date: "May 22, 2018"
+output: pdf_document
+---
+```{r}
+library("R.matlab")
+Subject = readMat("./data-starplus-04847-v7.mat")
+n = Subject$meta[[3]] # number of voxels = 4698
+voxel_coords = Subject$meta[[1]] # n-by-3 matrix with voxel_coords[i,] = (x,y,z) coordinates of voxel #i
+voxel_activity = list()
+
+ROI_names = unlist(Subject$meta[[16]][1,,])[-4]
+ROI_voxels = rep(0,n); for(i in 1:n){tmp = which(ROI_names == c(Subject$meta[[17]][[i]][[1]])); if(length(tmp)>0){ROI_voxels[i]=tmp}} # ROI_voxels[i] = 0 if voxel i is not assigned to any ROI
+
+```
+
+```{r}
+n_ROI=length(ROI_names)
+n_voxels_in_ROI=matrix(NA,2,n_ROI)
+for (i in 1:n_ROI) {
+  n_voxels_in_ROI[1,i]=i
+  n_voxels_in_ROI[2,i]=sum(ROI_voxels==i)
+}
+
+n_voxels_in_ROI
+```
+
+```{r}
+Sigma <- 
+```
+
+
+
+
+
+
+
+```{r}
+group_adaptive_BH<-function(P,group_sizes,alpha,gamma,signal){
+  a=length(group_sizes)
+  pi<-c()
+  p_til<-c()
+  #split into groups of different sizes (vector n)
+  g<-split(P, rep(seq_along(group_sizes), group_sizes)) 
+  for (i in 1:a){
+   pi[i]<-sum(g[[i]]>gamma)/(group_sizes[i]*(1-gamma)) 
+  }
+    for (i in 1:a){
+    for (j in 1:group_sizes[i]){
+        temp=g[[i]][j]*pi[i] 
+        p_til=c(p_til,temp)  
+        }#how to write a continuous p_til
+      }
+  for (i in 1:length(P)){
+    if(p_til[i]>gamma){
+      p_til[i]=Inf
+    }
+  }
+  k = max(which(sort(p_til)<=(1:length(P))/length(P) * alpha))
+  power=sum(p_til[which(signal==1)] <= alpha*k/length(P))/sum(signal)
+  FDP=sum(signal[which(p_til <= alpha*k/length(P))]==0)/sum(p_til <= alpha*k/length(P))
+  output=c(FDP,power)
+  return(output)
+}
+```
+
+##1b Below I generated data vector P containing 10 groups of nulls and 10 groups of 50% signals. Then I made a signal vector to indicate the position of signals for my group_adaptative_BH function. we then try when there are 20 groups with 50 data points each and got FDP=0.115 and power=0.644. We then tried it on a single group of 1000 and got FDP=0.097, and power=0.556. As we can see, with single group, we get less FDP but also less power. It is a more conservative approach then the one adjusted for groups.
+```{r}
+set.seed(123)
+n<-rep(50,20)
+alpha=0.1
+gamma=0.5
+rep=50
+k<-c()
+generate<-function(){
+  second.ten=c()
+  first.ten=runif(500,0,1)
+  for (i in 1:10) {
+    z=rnorm(25,2,1)
+    sig=pnorm(-abs(z))
+    second.ten=c(second.ten,runif(25,0,1),sig)
+  }
+   P=c(first.ten,second.ten) 
+   return(P)
+}
+P<-generate()
+signal=c(rep(0,500),rep(c(rep(0,25),rep(1,25)),10))
+output=group_adaptive_BH(P,n,alpha,gamma,signal)
+output
+```
+```{r}
+output.onegroup=group_adaptive_BH(P,1000,alpha,gamma,signal)
+output.onegroup
+```
+
