@@ -28,14 +28,35 @@ n_voxels_in_ROI
 ```
 
 ```{r}
-Sigma <- 
+library(MASS)
+# function to generate sigma matrix
+gen_sigma <- function(cov,n){
+  s = matrix(rep(cov,n^2), nrow = n)
+  diag(s) <- 1
+  return(s)
+}
+
+generate<-function(total_n,n,cov){
+  null_n=total_n-n
+  null=runif(null_n,0,1)
+  z = mvrnorm(1, mu = rep(2,n), gen_sigma(cov,n))
+  sig=pnorm(-abs(z))
+  P=c(null,sig) 
+  return(P)
+}
+
+total_p<-c()
+sig_position<-c()
+total_n=n_voxels_in_ROI[2,]
+n_sig=round(n_voxels_in_ROI[2,]*0.8)
+n_null=n_voxels_in_ROI[2,]-n_sig
+for (i in 1:n_ROI){
+  p <- generate(total_n[i],n_sig[i],0.9)
+  total_p <- c(total_p,p)
+  sig_pos <- c(rep(0,n_null[i]),rep(1,n_sig[i]))
+  sig_position<-c(sig_position,sig_pos)
+}
 ```
-
-
-
-
-
-
 
 ```{r}
 group_adaptive_BH<-function(P,group_sizes,alpha,gamma,signal){
@@ -66,32 +87,41 @@ group_adaptive_BH<-function(P,group_sizes,alpha,gamma,signal){
 }
 ```
 
-##1b Below I generated data vector P containing 10 groups of nulls and 10 groups of 50% signals. Then I made a signal vector to indicate the position of signals for my group_adaptative_BH function. we then try when there are 20 groups with 50 data points each and got FDP=0.115 and power=0.644. We then tried it on a single group of 1000 and got FDP=0.097, and power=0.556. As we can see, with single group, we get less FDP but also less power. It is a more conservative approach then the one adjusted for groups.
+
 ```{r}
-set.seed(123)
-n<-rep(50,20)
-alpha=0.1
-gamma=0.5
-rep=50
-k<-c()
-generate<-function(){
-  second.ten=c()
-  first.ten=runif(500,0,1)
-  for (i in 1:10) {
-    z=rnorm(25,2,1)
-    sig=pnorm(-abs(z))
-    second.ten=c(second.ten,runif(25,0,1),sig)
-  }
-   P=c(first.ten,second.ten) 
-   return(P)
-}
-P<-generate()
-signal=c(rep(0,500),rep(c(rep(0,25),rep(1,25)),10))
-output=group_adaptive_BH(P,n,alpha,gamma,signal)
-output
+group_adaptive_BH(total_p,total_n,0.05,0.5,sig_position)
 ```
+
+
+##Reduce the dimensions by clustering close voxels together:
 ```{r}
-output.onegroup=group_adaptive_BH(P,1000,alpha,gamma,signal)
-output.onegroup
+position_matrix <- Subject$meta[[1]]
+distance.matrix=as.matrix(dist(position_matrix))
+
+#use a subset of data to test
+M=distance.matrix[1:10,1:10]
+cluster_dist<-function(M,cutoff){
+  cluster<-list()
+  for (i in 1:ncol(M)){
+    temp<-c()
+    for (j in 1:nrow(M)){
+      if(M[j,i]>=0){
+      if(M[j,i]<= cutoff){temp<-c(temp,j)}}
+    }
+      cluster[[i]]=temp
+      M[temp,]=-1
+  }
+  return(cluster)
+}
+
+```
+
+```{r}
+clusters=cluster_dist(distance.matrix,3)
+#you can view the clusters, there are a few that are not assigned any voxels to
+```
+
+```{r}
+
 ```
 
