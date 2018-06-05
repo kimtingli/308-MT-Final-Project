@@ -20,30 +20,32 @@ for(ind in which(Subject$info[1,,]>1)){
 }
 
 ROI_names = unlist(Subject$meta[[16]][1,,])[-4]
-ROI_voxels = rep(0,n); for(i in 1:n){tmp = which(ROI_names == c(Subject$meta[[17]][[i]][[1]])); if(length(tmp)>0){ROI_voxels[i]=tmp}} # ROI_voxels[i] = 0 if voxel i is not assigned to any ROI
-
+ROI_voxels = rep(0,n); for(i in 1:n){tmp = which(ROI_names == c(Subject$meta[[17]][[i]][[1]]));
+# ROI_voxels[i] = 0 if voxel i is not assigned to any ROI
+if(length(tmp)>0){ROI_voxels[i]=tmp}} 
 ```
 
 ```{r}
 n_ROI=length(ROI_names) #number of ROIs
-n_voxels_in_ROI=matrix(NA,2,n_ROI) #number of voxels in each ROI
+#make a matrix with the number of voxels in each ROI
+n_voxels_in_ROI=matrix(NA,2,n_ROI) 
 for (i in 1:n_ROI) {
   n_voxels_in_ROI[1,i]=i
   n_voxels_in_ROI[2,i]=sum(ROI_voxels==i)
 }
-
+#first row is the ROI index, second is number of voxels
 n_voxels_in_ROI
 ```
 
 ```{r}
 library(MASS)
-# function to generate sigma matrix
+# function to generate cov matrix with diagonal 1 and same cov n
 gen_sigma <- function(cov,n){
   s = matrix(rep(cov,n^2), nrow = n)
   diag(s) <- 1
   return(s)
 }
-
+#generate a vector with half null and half signals
 generate<-function(total_n,n,cov){
   null_n=total_n-n
   null=runif(null_n,0,1)
@@ -86,6 +88,7 @@ set.seed(123)
 
 
 ```{r}
+#rep 250, uniform 0.5 corr, 50% null
 rep=250
 FDP.rep<-c()
 power.rep<-c()
@@ -107,7 +110,8 @@ mean(FDP.rep)
 mean(power.rep)
 ```
 
-```{r}
+```{r message=FALSE}
+#rep 250, uniform 0.9 corr, 50% null
 FDP.rep<-c()
 power.rep<-c()
 total_n=n_voxels_in_ROI[2,]
@@ -129,6 +133,7 @@ mean(power.rep)
 ```
 
 ```{r}
+#rep 250, uniform 0.1 corr, 50% null
 FDP.rep<-c()
 power.rep<-c()
 total_n=n_voxels_in_ROI[2,]
@@ -150,6 +155,7 @@ mean(power.rep)
 ```
 
 ```{r}
+#rep 250, uniform 0.1 corr, 50% null
 FDP.rep<-c()
 power.rep<-c()
 total_n=n_voxels_in_ROI[2,]
@@ -171,6 +177,7 @@ mean(power.rep)
 ```
 
 ```{r}
+#rep 250, uniform 0.9 corr, 50% null
 FDP.rep<-c()
 power.rep<-c()
 total_n=n_voxels_in_ROI[2,]
@@ -192,13 +199,118 @@ mean(power.rep)
 ```
 
 
+##real data covariance matrix
+```{r}
+#real covariance matrix from the data
+real_cov=cov(voxel_activity[[1]]) 
+#generate a random mix of signals and nulls based on the real data covariance
+full_p<-function(cov,prop_null){
+  z_all = mvrnorm(1, mu = rep(2,ncol(cov)), cov)
+  sig_all=pnorm(-abs(z_all))
+  null=sample(1:ncol(cov),round(ncol(cov)*prop_null))
+  n_null=round(ncol(cov)*prop_null)
+  sig_pos=rep(1,ncol(cov))
+  sig_pos[null]<-0
+  sig_all[null]<-runif(n_null,0,1)
+  #this line sort the generated p values into ROIs
+  sig_all=sig_all[order(ROI_voxels)] 
+  #first list element is the p values 
+  #second is indicating if it is signal, 1 signal, 0 null
+  return(list(sig_all,sig_pos))
+}
+
+```
+
+```{r}
+#prop_null=proportion of null
+#cov is covariance matrix
+#total_n is number of voxels in each ROI aka group sizes vector
+#alpha is usually 0.05
+#gamma is the cutoff line for significance tested in group
+iteration<-function(rep,prop_null,cov,total_n,alpha,gamma){
+FDP.rep<-c()
+power.rep<-c()
+for(j in 1:rep){
+full_matrix=full_p(cov,prop_null)
+FDP.rep[j]=group_adaptive_BH(full_matrix[[1]],total_n,alpha,gamma,full_matrix[[2]])[1]
+power.rep[j]<-group_adaptive_BH(full_matrix[[1]],total_n,alpha,gamma,full_matrix[[2]])[2]}
+return(list(mean(FDP.rep),mean(power.rep)))}
+
+#number of voxels in each ROI
+#7 voxels were not assigned to any ROI before
+#now we put them back
+n_voxels_in_ROI_all=matrix(NA,2,n_ROI+1) 
+for (i in 0:n_ROI) {
+  n_voxels_in_ROI_all[1,i+1]=i
+  n_voxels_in_ROI_all[2,i+1]=sum(ROI_voxels==i)
+}
+n_voxels_in_ROI_all
+total_n_all=n_voxels_in_ROI_all[2,]
+
+iteration(10,0.2,real_cov,total_n_all,0.05,0.5)
+```
+
+```{r}
+iteration(10,0.05,real_cov,total_n_all,0.05,0.5)
+```
+
+```{r}
+iteration(10,0.5,real_cov,total_n_all,0.05,0.5)
+```
+
+
+##real data cov matrix with regular BH modified by certain parameter
+```{r}
+#this is a slight modification of full_p function
+#this will not sort the voxels by its ROIs
+full_p_nogroup<-function(cov,prop_null){
+  z_all = mvrnorm(1, mu = rep(2,ncol(cov)), cov)
+  sig_all=pnorm(-abs(z_all))
+  null=sample(1:ncol(cov),round(ncol(cov)*prop_null))
+  n_null=round(ncol(cov)*prop_null)
+  sig_pos=rep(1,ncol(cov))
+  sig_pos[null]<-0
+  sig_all[null]<-runif(n_null,0,1)
+  #first list element is the p values and second is indicating if it is signal, 1 signal, 0 null
+  return(list(sig_all,sig_pos))
+}
+
+regular_BH<-function(P,alpha,signal,c){
+  k = max(which(sort(P)<=(1:length(P))/length(P) * alpha*c))
+  power=sum(P[which(signal==1)] <= alpha*k*c/length(P))/max(sum(signal),1)
+  FDP=sum(signal[which(P <= alpha*k*c/length(P))]==0)/max(sum(P <= alpha*k*c/length(P)),1)
+  output=c(FDP,power)
+  return(output)
+}
+
+iteration_regular<-function(rep,prop_null,cov,alpha,c){
+FDP.rep<-c()
+power.rep<-c()
+for(j in 1:rep){
+full_matrix=full_p_nogroup(cov,prop_null)
+FDP.rep[j]=regular_BH(full_matrix[[1]],alpha,full_matrix[[2]],c)[1]
+power.rep[j]<-regular_BH(full_matrix[[1]],alpha,full_matrix[[2]],c)[2]}
+return(list(mean(FDP.rep),mean(power.rep)))}
+
+iteration_regular(1,0.5,real_cov,0.05,1)
+
+iteration_regular(1,0.5,real_cov,0.05,1)
+```
+
+
+
+
+
 ##Reduce the dimensions by clustering close voxels together:
 ```{r}
+#coordinates matrix
 position_matrix <- Subject$meta[[1]]
+#calculate distance between each pair of voxels - voxel index
 distance.matrix=as.matrix(dist(position_matrix))
 
-#use a subset of data to test
+#use a subset of data to verify 
 M=distance.matrix[1:10,1:10]
+#put voxels that has distance less than the cutoff into the same cluster, exclusively
 cluster_dist<-function(M,cutoff){
   cluster<-list()
   for (i in 1:ncol(M)){
@@ -223,57 +335,3 @@ non_null_clusters=Filter(Negate(is.null), clusters)
 #total number of clusters
 length(non_null_clusters)
 ```
-
-##real data covariance matrix
-```{r}
-#real covariance matrix from the data
-real_cov=cov(voxel_activity[[1]]) 
-#generate a random mix of signals and nulls based on the real data covariance
-full_p<-function(cov,prop_null){
-  z_all = mvrnorm(1, mu = rep(2,ncol(cov)), cov)
-  sig_all=pnorm(-abs(z_all))
-  null=sample(1:ncol(cov),round(ncol(cov)*prop_null))
-  n_null=round(ncol(cov)*prop_null)
-  sig_pos=rep(1,ncol(cov))
-  sig_pos[null]<-0
-  sig_all[null]<-runif(n_null,0,1)
-  #basically if you want to generate regular data, just comment out this line for full_p function
-  sig_all=sig_all[order(ROI_voxels)] 
-  #first list element is the p values and second is indicating if it is signal, 1 signal, 0 null
-  return(list(sig_all,sig_pos))
-}
-
-```
-
-```{r}
-#prop_null=proportion of null, cov is covariance matrix, total_n is number of voxels in each ROI, aka group sizes vector
-#alpha is usually 0.05, gamma is the cutoff line for significance tested in group
-iteration<-function(rep,prop_null,cov,total_n,alpha,gamma){
-FDP.rep<-c()
-power.rep<-c()
-for(j in 1:rep){
-full_matrix=full_p(cov,prop_null)
-FDP.rep[j]=group_adaptive_BH(full_matrix[[1]],total_n,alpha,gamma,full_matrix[[2]])[1]
-power.rep[j]<-group_adaptive_BH(full_matrix[[1]],total_n,alpha,gamma,full_matrix[[2]])[2]}
-return(list(mean(FDP.rep),mean(power.rep)))}
-
-n_voxels_in_ROI=matrix(NA,2,n_ROI+1) #number of voxels in each ROI
-for (i in 0:n_ROI) {
-  n_voxels_in_ROI[1,i+1]=i
-  n_voxels_in_ROI[2,i+1]=sum(ROI_voxels==i)
-}
-n_voxels_in_ROI
-total_n=n_voxels_in_ROI[2,]
-
-iteration(1,0.2,real_cov,total_n,0.05,0.5)
-```
-
-```{r}
-iteration(1,0.05,real_cov,total_n,0.05,0.5)
-```
-
-```{r}
-iteration(1,0.5,real_cov,total_n,0.05,0.5)
-```
-
-
