@@ -275,6 +275,7 @@ full_p_nogroup<-function(cov,prop_null){
   return(list(sig_all,sig_pos))
 }
 
+#regular BH function
 regular_BH<-function(P,alpha,signal,c){
   k = max(which(sort(P)<=(1:length(P))/length(P) * alpha*c))
   power=sum(P[which(signal==1)] <= alpha*k*c/length(P))/max(sum(signal),1)
@@ -292,12 +293,78 @@ FDP.rep[j]=regular_BH(full_matrix[[1]],alpha,full_matrix[[2]],c)[1]
 power.rep[j]<-regular_BH(full_matrix[[1]],alpha,full_matrix[[2]],c)[2]}
 return(list(mean(FDP.rep),mean(power.rep)))}
 
-iteration_regular(1,0.5,real_cov,0.05,1)
-
+#regular BH without modification
 iteration_regular(1,0.5,real_cov,0.05,1)
 ```
 
+```{r}
+#regular BH with factor of 3
+iteration_regular(1,0.5,real_cov,0.05,3)
+```
 
+```{r}
+#regular BH with factor of 2
+iteration_regular(1,0.5,real_cov,0.05,2)
+```
+
+```{r}
+plot_interval=seq(1,3,by=0.1)
+plot_FDR=c()
+plot_power=c()
+for (i in 1:21){
+temp=iteration_regular(1,0.5,real_cov,0.05,plot_interval[i])
+plot_FDR=c(plot_FDR,temp[[1]])
+plot_power=c(plot_power,temp[[2]])}
+
+plot(plot_interval,plot_FDR,type = "l",col="blue",xlab = "factor value", ylab = "", ylim = c(0,0.7))
+abline(h=0.05,col="red")
+points(plot_interval,plot_power,type = "l",col="green")
+```
+```{r}
+plot(plot_interval,plot_FDR,type = "l",col="blue",xlab = "factor value", ylab = "FDR")
+abline(h=0.05,col="red")
+plot(plot_interval,plot_power,type = "l",col="blue",xlab = "factor value", ylab = "power")
+```
+
+
+##Spatial Correlation
+```{r}
+voxel_coords = Subject$meta[[1]]
+dist = as.matrix(dist(voxel_coords))
+const = .5
+rho_dist = const^((dist^2))
+
+full_matrix=full_p_nogroup(rho_dist,0.5)
+spatial_regular_BH=regular_BH(full_matrix[[1]],0.05,full_matrix[[2]],1)
+spatial_regular_BH
+
+iteration_regular(1,0.5,rho_dist,0.05,1)
+
+
+plot_interval=seq(1,3,by=0.1)
+plot_FDR_rho=c()
+plot_power_rho=c()
+for (i in 1:21){
+temp=iteration_regular(1,0.5,rho_dist,0.05,plot_interval[i])
+plot_FDR_rho=c(plot_FDR_rho,temp[[1]])
+plot_power_rho=c(plot_power_rho,temp[[2]])}
+
+plot(plot_interval,plot_FDR,type = "l",col="blue",xlab = "factor value", ylab = "", ylim = c(0,0.7))
+abline(h=0.05,col="red")
+points(plot_interval,plot_FDR_rho,type = "l",col="green")
+points(plot_interval,plot_power,type = "b",col="blue")
+points(plot_interval,plot_power_rho,type = "b",col="green")
+```
+
+```{r}
+plot(plot_interval,plot_FDR,type = "l",col="blue",xlab = "factor value", ylab = "FDR")
+abline(h=0.05,col="red")
+points(plot_interval,plot_FDR_rho,type = "l",col="green")
+```
+```{r}
+plot(plot_interval,plot_power,type = "l",col="blue",xlab = "factor value", ylab = "power",ylim =c(0.3,0.7))
+points(plot_interval,plot_power_rho,type = "l",col="green")
+```
 
 
 
@@ -335,3 +402,16 @@ non_null_clusters=Filter(Negate(is.null), clusters)
 #total number of clusters
 length(non_null_clusters)
 ```
+
+```{r}
+cluster_BH<-function(clusters,P,signal){
+  P_reduced=c()
+  sig_pos_reduced=c()
+  for(i in 1:length(clusters)){
+    for(j in 1:length(clusters[i])){
+      which.min()
+    }
+  }
+}
+```
+
