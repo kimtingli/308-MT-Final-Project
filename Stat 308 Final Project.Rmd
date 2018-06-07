@@ -366,6 +366,11 @@ plot(plot_interval,plot_power,type = "l",col="blue",xlab = "factor value", ylab 
 points(plot_interval,plot_power_rho,type = "l",col="green")
 ```
 
+```{r}
+library(knitr)
+x=data.frame(plot_interval,plot_FDR,plot_FDR_rho,plot_power,plot_power_rho)
+kable(x,col.names = c("factor c","FDR","FDR (spatial)","power","power (spatial)"))
+```
 
 
 ##Reduce the dimensions by clustering close voxels together:
@@ -395,7 +400,7 @@ cluster_dist<-function(M,cutoff){
 ```
 
 ```{r}
-#obtain a list of clusters
+#obtain a list of clusters, within 3 voxels
 clusters=cluster_dist(distance.matrix,3)
 #remove the null elements in the list
 non_null_clusters=Filter(Negate(is.null), clusters) 
@@ -404,14 +409,88 @@ length(non_null_clusters)
 ```
 
 ```{r}
-cluster_BH<-function(clusters,P,signal){
+#reduce the dim
+#use minimum p to represent the cluster
+cluster_BH<-function(clusters,P,signal,c){
   P_reduced=c()
   sig_pos_reduced=c()
   for(i in 1:length(clusters)){
-    for(j in 1:length(clusters[i])){
-      which.min()
+    P_til=c()
+    for(j in 1:length(clusters[[i]])){
+      temp=P[clusters[[i]][j]]
+      P_til=c(P_til,temp)
     }
+    P_reduced=c(P_reduced,P[clusters[[i]][which.min(P_til)]])
+    sig_pos_reduced=c(sig_pos_reduced,signal[clusters[[i]][which.min(P_til)]])
   }
+  regular_BH(P_reduced,0.05,sig_pos_reduced,c)
 }
+
+matrix_cluster=full_p_nogroup(real_cov,0.5)
+cluster_BH(clusters,matrix_cluster[[1]],matrix_cluster[[2]],1)
+```
+
+```{r}
+matrix_cluster=full_p_nogroup(real_cov,0.8)
+cluster_BH(clusters,matrix_cluster[[1]],matrix_cluster[[2]],1)
+```
+
+
+```{r cashe=T}
+#iteration_cluster<-function(clusters,rep,prop_null,cov,c){
+#FDP.rep<-c()
+#power.rep<-c()
+#for(j in 1:rep){
+#full_matrix=full_p_nogroup(cov,prop_null)
+#FDP.rep[j]=cluster_BH(clusters,full_matrix[[1]],full_matrix[[2]],c)[1]
+#power.rep[j]<-cluster_BH(clusters,full_matrix[[1]],full_matrix[[2]],c)[2]}
+#return(list(mean(FDP.rep),mean(power.rep)))}
+
+
+#plot_interval=seq(1,3,by=0.1)
+#plot_FDR_cluster=c()
+#plot_power_cluster=c()
+#for (i in 1:21){
+#temp=iteration_cluster(clusters,1,0.5,real_cov,plot_interval[i])
+#plot_FDR_cluster=c(plot_FDR_cluster,temp[[1]])
+#plot_power_cluster=c(plot_power_cluster,temp[[2]])}
+```
+
+##real data-compare Picture first to Sentence first for trial 1
+```{r}
+real_p=c()
+for (i in 1:4698){
+  temp=t.test(voxel_activity[[1]][1:27,i],voxel_activity[[1]][28:54,i],paired = TRUE,alternative = "two.sided")
+  real_p=c(real_p,temp$p.value)
+}
+
+realdata_BH<-function(P,alpha,c){
+  k = max(which(sort(P)<=(1:length(P))/length(P) * alpha*c))
+  sig=which(P <= alpha*k*c/length(P))
+  return(sig)
+}
+
+discovery1=realdata_BH(real_p,0.05,1.6)
+length(discovery1)
+```
+
+
+```{r}
+cluster_BH<-function(clusters,P,c){
+  P_reduced=c()
+  for(i in 1:length(clusters)){
+    P_til=c()
+    for(j in 1:length(clusters[[i]])){
+      temp=P[clusters[[i]][j]]
+      P_til=c(P_til,temp)
+    }
+    P_reduced=c(P_reduced,P[clusters[[i]][which.min(P_til)]])
+  }
+  realdata_BH(P_reduced,0.05,c)
+}
+
+
+discovery2=cluster_BH(clusters,real_p,1)
+length(discovery2)
 ```
 
